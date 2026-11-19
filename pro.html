@@ -626,7 +626,7 @@
   <body>
     <div class="app">
       <header>
-        <h1>M<span class="accent">ε</span>mol Pro<span class="ver">- v0.03</span></h1>
+        <h1>M<span class="accent">ε</span>mol Pro<span class="ver">- v0.05</span></h1>
         <div class="header-right">
           <div id="save-indicator"><span data-icon="check" data-size="14"></span>保存済み</div>
           <button id="btn-notice" class="round-btn" aria-label="お知らせ" title="お知らせ"><span data-icon="bell" data-size="18"></span><span id="notice-dot"></span></button>
@@ -907,6 +907,7 @@
           //   **太字**  *斜体*  ***太字斜体***  @@下線@@（@の内側にスペースなし）
           //   ||あああ||  書体指定を消す（中の記号も解釈せずそのまま表示）
           //   [RRR]文字[bbb]  先頭の記号=文字色(大文字) / 末尾の記号=下線色(小文字)
+          //   [YYGG]文字[000]  4文字で色を混ぜる（4つの記号の平均。YYGG=黄:緑=2:2）
           //   @[YYY]文字[000]@  マーカー（先頭は大文字の色、末尾の 000=黒文字 / FFF=白文字）
           //   URL → 色付き＋下線のリンク
           // --- URLの判定（Lite / Pro 共通の考え方）---
@@ -927,30 +928,57 @@
               return u;
           }
 
+          // 色コード: 3文字（同じ記号×3＝その色）か、4文字（4つの記号の平均＝混ぜた色。YYGG は 黄:緑=2:2、YGGG は 1:3）
+          // 大文字=文字色、小文字=下線色。大文字と小文字は混ぜられない。0 は大小がないので、ほかの文字に従う（0 だけなら 000 と同じ扱い）
+          const COLOR_CODE_SRC = '[ROYGCBM0F]{4}|[roygcbmf0]{4}|RRR|rrr|OOO|ooo|YYY|yyy|GGG|ggg|CCC|ccc|BBB|bbb|MMM|mmm|000|FFF|fff';
+          const MARKER_CODE_SRC = '[ROYGCBM0F]{4}|RRR|OOO|YYY|GGG|CCC|BBB|MMM|000|FFF';
+          const COLOR_OPEN_RE = new RegExp('^\\[(' + COLOR_CODE_SRC + ')\\]');
+          const MARKER_OPEN_RE = new RegExp('^@\\[(' + MARKER_CODE_SRC + ')\\]');
           const PALETTE = {
               R: '#ff0000', O: '#ff8000', Y: '#ffff00', G: '#00ff00',
               C: '#00ffff', B: '#0000ff', M: '#ff00ff', '0': '#000000', F: '#ffffff'
           };
 
+          // 記号を混ぜた色（RGBの平均）。3文字の単色もそのまま使える
+          function mixColors(code) {
+              let r = 0, g = 0, b = 0;
+              for (const ch of code) {
+                  const c = PALETTE[ch.toUpperCase()];
+                  r += parseInt(c.slice(1, 3), 16);
+                  g += parseInt(c.slice(3, 5), 16);
+                  b += parseInt(c.slice(5, 7), 16);
+              }
+              const h = v => Math.round(v / code.length).toString(16).padStart(2, '0');
+              return '#' + h(r) + h(g) + h(b);
+          }
+          // 色コードの働き: 色と、文字色(text)か下線色(ul)か（0 だけなら null）
+          function parseColorCode(code) {
+              let role = null;
+              for (const ch of code) {
+                  if (ch === '0') continue;
+                  role = ch === ch.toUpperCase() ? 'text' : 'ul';
+                  break;
+              }
+              return { color: mixColors(code), role };
+          }
+
           // [先頭の記号][末尾の記号] から 文字色 と 下線色 を決める
-          // 大文字(RRR など)=文字色 / 小文字(rrr など)=下線色 / 000 は先頭なら文字色・末尾なら下線色
+          // 大文字(RRR など)=文字色 / 小文字(rrr など)=下線色 / 0 だけのコードは先頭なら文字色・末尾なら下線色
           function resolveColorTags(openCode, closeCode) {
               let textColor = null;
               let ulColor = null;
               [[openCode, true], [closeCode, false]].forEach(([code, isOpen]) => {
-                  const color = PALETTE[code[0].toUpperCase()];
-                  let role;
-                  if (code === '000') role = isOpen ? 'text' : 'ul';
-                  else role = code[0] === code[0].toUpperCase() ? 'text' : 'ul';
-                  if (role === 'text' && textColor === null) textColor = color;
-                  if (role === 'ul' && ulColor === null) ulColor = color;
+                  const p = parseColorCode(code);
+                  const role = p.role || (isOpen ? 'text' : 'ul');
+                  if (role === 'text' && textColor === null) textColor = p.color;
+                  if (role === 'ul' && ulColor === null) ulColor = p.color;
               });
               return { text: textColor, ul: ulColor };
           }
 
           // 色の終了記号を探す（マーカーの @[..] と [..]@ は除く）
           function findColorTag(text, from) {
-              const re = /\[(RRR|rrr|OOO|ooo|YYY|yyy|GGG|ggg|CCC|ccc|BBB|bbb|MMM|mmm|000|FFF|fff)\]/g;
+              const re = new RegExp('\\[(' + COLOR_CODE_SRC + ')\\]', 'g');
               re.lastIndex = from;
               let m;
               while ((m = re.exec(text)) !== null) {
@@ -1041,11 +1069,11 @@
                   }
 
                   // @[YYY]文字[000]@ マーカー（開始）
-                  if ((m = rest.match(/^@\[(RRR|OOO|YYY|GGG|CCC|BBB|MMM|000|FFF)\]/))) {
+                  if ((m = rest.match(MARKER_OPEN_RE))) {
                       const closer = text.slice(i + m[0].length).match(/\[(000|FFF)\]@/);
                       if (closer) {
                           flush();
-                          st.mbg = PALETTE[m[1][0]];
+                          st.mbg = mixColors(m[1]);
                           st.mfg = closer[1] === '000' ? '#000000' : '#ffffff';
                       } else {
                           buf += m[0];
@@ -1088,7 +1116,7 @@
                   }
 
                   // [RRR]文字[bbb] 色
-                  if ((m = rest.match(/^\[(RRR|rrr|OOO|ooo|YYY|yyy|GGG|ggg|CCC|ccc|BBB|bbb|MMM|mmm|000|FFF|fff)\]/))) {
+                  if ((m = rest.match(COLOR_OPEN_RE))) {
                       if (st.color) {
                           flush();
                           st.color = false;
@@ -1232,8 +1260,9 @@
           function docTitle(text) {
               const line = (text.split('\n').find(l => l.trim() !== '') || '').trim();
               let t = line.replace(/^#+[ 　]?/, '')
-                  .replace(/\[(?:RRR|rrr|OOO|ooo|YYY|yyy|GGG|ggg|CCC|ccc|BBB|bbb|MMM|mmm|000|FFF|fff)\]/g, '')
-                  .replace(/@\[[A-Z0]{3}\]|@@|\*\*\*|\*\*|\*|\|\|/g, '')
+                  .replace(/@\[[A-Z0]{3,4}\]|\[(?:000|FFF)\]@/g, '')   // マーカーは色の記号より先に外す（@ が残らないように）
+                  .replace(new RegExp('\\[(?:' + COLOR_CODE_SRC + ')\\]', 'g'), '')
+                  .replace(/@\[[A-Z0]{3,4}\]|@@|\*\*\*|\*\*|\*|\|\|/g, '')
                   .replace(/^```/, '')
                   .trim();
               if (!t) return '無題';
@@ -1322,7 +1351,7 @@
           // --- 保存先の保護とお知らせ ---
           const BACKUP_KEY = 'memolpro_last_backup';
           const NOTICE_KEY = 'memolpro_notice_seen';
-          const NOTICE_VER = '0.03';
+          const NOTICE_VER = '0.05';
           // ブラウザに「消さないで」と頼む（認められるかはブラウザ次第）
           try {
               if (navigator.storage && navigator.storage.persist) {
@@ -1572,9 +1601,9 @@
               mapSelectionLines(core => allWrapped ? core.slice(token.length, core.length - token.length) : token + core + token);
           }
 
-          const COLOR_CODES = 'RRR|rrr|OOO|ooo|YYY|yyy|GGG|ggg|CCC|ccc|BBB|bbb|MMM|mmm|000|FFF|fff';
+          const COLOR_CODES = COLOR_CODE_SRC;
           const COLOR_FULL = new RegExp('^\\[(?:' + COLOR_CODES + ')\\]([\\s\\S]*)\\[(?:' + COLOR_CODES + ')\\]$');
-          const MARKER_FULL = /^@\[(?:RRR|OOO|YYY|GGG|CCC|BBB|MMM|000|FFF)\]([\s\S]*)\[(?:000|FFF)\]@$/;
+          const MARKER_FULL = new RegExp('^@\\[(?:' + MARKER_CODE_SRC + ')\\]([\\s\\S]*)\\[(?:000|FFF)\\]@$');
 
           // 色・マーカーは入れ子にできないので、すでに付いていれば付け替える
           function applyTags(open, close, fullRe) {
@@ -2043,6 +2072,11 @@ ${box.innerHTML}
               ]);
 
               section('更新履歴');
+              release('v0.05（2026/11/19）', [
+                  '色を4文字で混ぜられるようにしました（例: [YYGG] は黄と緑を半分ずつ）。',
+                  'マーカーを使った1行目が、文書の一覧で @題名@ と表示される問題を直しました。',
+                  'Lite と同じ v0.05 にそろえました（Pro は v0.04 を飛ばしています）。'
+              ]);
               release('v0.03（2026/11/19）', [
                   'お知らせ（このベルのボタン）を追加しました。',
                   '「Safariの方へ」と更新履歴を、ここに置きました。'
@@ -2191,6 +2225,11 @@ ${box.innerHTML}
               });
               infoBody.appendChild(chips);
               note('大文字=文字色、小文字=下線色。白は FFF が文字色、fff が下線色です。');
+              note('4文字にすると色を混ぜられます。4つの記号の平均の色になります（YYGG は黄と緑を2:2、YGGG は1:3）。大文字と小文字は混ぜられません。');
+              example('[YYGG]黄緑[000]', { desc: '黄と緑を半分ずつ混ぜた文字色＋黒い下線' });
+              example('[RRRB]赤寄りの紫[rrrb]', { desc: '赤3：青1の色を、文字と下線の両方に' });
+              example('[00FF]灰色[000]', { desc: '黒と白を半分ずつ＝灰色（000F なら濃い灰色）' });
+              example('@[YYGG]黄緑マーカー[000]@', { desc: 'マーカーの色も混ぜられます' });
 
               section('マーカー');
               note('@[色]文字[000]@ の形です。色は大文字のみ。末尾は 000=黒文字、FFF=白文字。');
