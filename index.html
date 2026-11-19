@@ -1,0 +1,1340 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Mεmol - 30秒メモ</title>
+    <style>
+      /* ===== リセット ===== */
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      button, textarea { font: inherit; color: inherit; border: 0; background: none; }
+      button { cursor: pointer; }
+      svg { display: block; flex-shrink: 0; }
+
+      /* ===== ベース ===== */
+      :root {
+        --gray-50: #f9fafb;
+        --gray-100: #f3f4f6;
+        --gray-200: #e5e7eb;
+        --gray-400: #9ca3af;
+        --gray-600: #4b5563;
+        --gray-700: #374151;
+        --gray-800: #1f2937;
+        --teal-500: #14b8a6;
+        --teal-600: #0d9488;
+        --red-50: #fef2f2;
+        --red-100: #fee2e2;
+        --red-500: #ef4444;
+        --red-600: #dc2626;
+      }
+      html {
+        -webkit-text-size-adjust: 100%;
+        height: 100%;
+        overflow: hidden;
+        overscroll-behavior: none; /* ページ全体のスクロール・バウンスを止める */
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif;
+        line-height: 1.5;
+        background: var(--gray-50);
+        color: var(--gray-800);
+        position: fixed; /* iOS Safariでページ自体が下へ動くのを防ぐ */
+        inset: 0;
+        width: 100%;
+        overflow: hidden;
+        display: flex;
+        justify-content: center;
+        overscroll-behavior: none;
+      }
+
+      /* ===== レイアウト ===== */
+      .app {
+        width: 100%;
+        max-width: 28rem;
+        height: 100%;
+        background: #fff;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        position: relative;
+        display: flex;
+        flex-direction: column;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.75rem 1.25rem;
+        border-bottom: 1px solid var(--gray-100);
+        background: #fff;
+        z-index: 10;
+      }
+      h1 {
+        font-size: 1.5rem;
+        line-height: 2rem;
+        font-weight: 700;
+        letter-spacing: -0.025em;
+        color: var(--gray-800);
+        display: flex;
+        align-items: baseline;
+      }
+      h1 .accent { color: var(--teal-500); }
+      h1 .ver {
+        font-size: 13px;
+        color: var(--gray-400);
+        margin-left: 0.5rem;
+        letter-spacing: normal;
+      }
+
+      #save-indicator {
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: var(--teal-500);
+        opacity: 0;
+        transition: opacity 0.3s;
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+      }
+
+      main {
+        flex: 1;
+        min-height: 0;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+      }
+      #main-editor {
+        width: 100%;
+        flex: 1;
+        min-height: 0;
+        padding: 1.25rem;
+        font-size: 1.125rem;
+        line-height: 1.625;
+        resize: none;
+        outline: none;
+        background: transparent;
+      }
+      #main-editor::placeholder { color: #94a3b8; font-weight: 400; }
+
+      footer {
+        padding: 1rem 1rem calc(2rem + env(safe-area-inset-bottom, 0px));
+        background: #fff;
+        border-top: 1px solid var(--gray-100);
+        display: flex;
+        gap: 0.75rem;
+        z-index: 10;
+      }
+      @media (min-width: 640px) {
+        footer { padding-bottom: 1rem; }
+      }
+
+      /* ===== ボタン ===== */
+      .btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1rem;
+        border-radius: 0.75rem;
+        font-weight: 500;
+        transition: all 0.15s;
+      }
+      .btn:active { transform: scale(0.95); }
+      .btn-gray { background: var(--gray-100); color: var(--gray-700); }
+      .btn-gray:hover { background: var(--gray-200); }
+      .btn-teal {
+        background: var(--teal-500);
+        color: #fff;
+        box-shadow: 0 10px 15px -3px rgba(20, 184, 166, 0.3), 0 4px 6px -4px rgba(20, 184, 166, 0.3);
+      }
+      .btn-teal:hover { background: var(--teal-600); }
+      .btn-red {
+        background: var(--red-500);
+        color: #fff;
+        box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.3), 0 4px 6px -4px rgba(239, 68, 68, 0.3);
+      }
+      .btn-red:hover { background: var(--red-600); }
+      #btn-history { flex: 1; }
+      #btn-save-new { flex: 2; }
+      .btn { white-space: nowrap; }
+      #btn-history { padding-left: 0.375rem; padding-right: 0.375rem; }
+      #btn-save-new { padding-left: 0.5rem; padding-right: 0.5rem; }
+      /* 狭い画面（〜360px）ではフッターを少し詰めてはみ出しを防ぐ */
+      @media (max-width: 360px) {
+        footer { padding-left: 0.75rem; padding-right: 0.75rem; gap: 0.5rem; }
+        footer .btn { font-size: 0.875rem; gap: 0.375rem; }
+        footer .btn svg { width: 18px; height: 18px; }
+        #btn-history { padding-left: 0.25rem; padding-right: 0.25rem; }
+        #btn-save-new { padding-left: 0.375rem; padding-right: 0.375rem; }
+      }
+
+      /* ===== 履歴パネル (Bottom Sheet) ===== */
+      #history-panel {
+        position: absolute;
+        inset: 0;
+        z-index: 50;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        pointer-events: none;
+        transform: translateY(100%);
+        transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      #history-panel.open { transform: translateY(0); }
+      #history-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.2);
+        opacity: 0;
+        transition: opacity 0.3s;
+      }
+      .sheet {
+        background: var(--gray-50);
+        height: 85%;
+        border-radius: 1.5rem 1.5rem 0 0;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        display: flex;
+        flex-direction: column;
+        pointer-events: auto;
+        position: relative;
+        z-index: 10;
+      }
+      .sheet-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1.25rem;
+        background: #fff;
+        border-radius: 1.5rem 1.5rem 0 0;
+        border-bottom: 1px solid var(--gray-200);
+      }
+      .sheet-header h2 { font-size: 1.125rem; font-weight: 700; color: var(--gray-800); }
+      .sheet-actions { display: flex; align-items: center; gap: 0.5rem; }
+      .round-btn {
+        padding: 0.5rem;
+        background: var(--gray-100);
+        border-radius: 9999px;
+        color: var(--gray-600);
+        transition: all 0.15s;
+      }
+      .round-btn:hover { background: var(--gray-200); }
+      .round-btn:active { transform: scale(0.95); }
+
+      #history-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
+      #history-list::-webkit-scrollbar { display: none; }
+
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 10rem;
+        color: var(--gray-400);
+        font-size: 0.875rem;
+        gap: 0.5rem;
+      }
+      .empty svg { opacity: 0.5; }
+
+      .card {
+        background: #fff;
+        padding: 1rem;
+        border-radius: 1rem;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        border: 1px solid var(--gray-100);
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        overflow: hidden;
+        flex-shrink: 0;
+      }
+      .card-text {
+        color: var(--gray-700);
+        word-break: break-word;
+        overflow-wrap: anywhere;
+        font-size: 0.875rem;
+        line-height: 1.6;
+        position: relative;
+      }
+      .card-text.collapsed { max-height: 9rem; overflow: hidden; }
+      .card-text.clamped { cursor: pointer; }
+      .card-text.collapsed.clamped::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 2.5rem;
+        background: linear-gradient(to bottom, rgba(255, 255, 255, 0), #fff);
+        pointer-events: none;
+      }
+
+      /* Lite: 1行目はタイトル、リンクは色付き＋下線。それ以外は書いたまま表示 */
+      .memo-title { font-size: 1.25em; font-weight: 700; line-height: 1.4; color: var(--gray-800); white-space: pre-wrap; }
+      .memo-line { white-space: pre-wrap; min-height: 1.6em; }
+      .card-text a {
+        color: #2563eb;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+      .card-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 0.25rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid var(--gray-50);
+      }
+      .card-time { font-size: 0.75rem; color: var(--gray-400); font-weight: 500; }
+      .card-actions { display: flex; gap: 0.5rem; }
+      .icon-btn {
+        width: 2rem;
+        height: 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        transition: background-color 0.15s;
+      }
+      .icon-btn.copy { background: var(--gray-50); color: var(--gray-600); }
+      .icon-btn.copy:hover { background: var(--gray-100); }
+      .icon-btn.edit { background: #f0fdfa; color: var(--teal-600); }
+      .icon-btn.edit:hover { background: #ccfbf1; }
+
+      /* 編集中バー */
+      #edit-banner {
+        display: none;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        padding: 0.5rem 1.25rem;
+        background: #f0fdfa;
+        border-bottom: 1px solid #ccfbf1;
+        color: var(--teal-600);
+        font-size: 0.8125rem;
+        font-weight: 500;
+      }
+      #edit-banner.show { display: flex; }
+      #edit-banner .label { display: flex; align-items: center; gap: 0.375rem; }
+      #btn-cancel-edit {
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        background: #fff;
+        border: 1px solid #99f6e4;
+        color: var(--teal-600);
+        font-size: 0.8125rem;
+        font-weight: 500;
+      }
+      #btn-cancel-edit:active { transform: scale(0.95); }
+      .card-left { display: flex; align-items: center; gap: 0.5rem; }
+      /* 削除は編集・コピーと反対の左端に置き、普段は目立たない色にする */
+      .icon-btn.del { width: 1.75rem; height: 1.75rem; background: transparent; color: var(--gray-400); }
+      .icon-btn.del:hover, .icon-btn.del:active { background: var(--red-50); color: var(--red-500); }
+      #confirm-excerpt {
+        background: var(--gray-50);
+        border-radius: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        margin-bottom: 0.75rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--gray-700);
+        word-break: break-all;
+      }
+
+      /* ===== トースト ===== */
+      #toast {
+        position: absolute;
+        top: 4rem;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--gray-800);
+        color: #fff;
+        padding: 0.5rem 1rem;
+        border-radius: 9999px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s;
+        z-index: 70;
+        white-space: nowrap;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+      }
+
+      /* ===== 使い方 (iボタン) ===== */
+      .header-right { display: flex; align-items: center; gap: 0.5rem; }
+      #info-modal {
+        position: absolute;
+        inset: 0;
+        z-index: 80;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        pointer-events: none;
+      }
+      #info-modal.open { pointer-events: auto; }
+      #info-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.3);
+        opacity: 0;
+        transition: opacity 0.3s;
+      }
+      #info-modal.open #info-backdrop { opacity: 1; }
+      #info-sheet {
+        position: relative;
+        z-index: 10;
+        height: 90%;
+        background: #fff;
+        border-radius: 1.5rem 1.5rem 0 0;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        display: flex;
+        flex-direction: column;
+        transform: translateY(100%);
+        transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      #info-modal.open #info-sheet { transform: translateY(0); }
+      #info-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0.5rem 1.25rem calc(2rem + env(safe-area-inset-bottom, 0px));
+        font-size: 0.875rem;
+        color: var(--gray-700);
+      }
+      #info-body h3 {
+        margin: 1.25rem 0 0.375rem;
+        font-size: 0.9375rem;
+        font-weight: 700;
+        color: var(--teal-600);
+      }
+      #info-body p, #info-body li { line-height: 1.7; }
+      #info-body ul { padding-left: 1.1rem; }
+      #info-body .note { font-size: 0.8125rem; color: var(--gray-600); margin: 0.25rem 0; }
+      /* ===== 削除確認モーダル ===== */
+      #confirm-modal {
+        position: absolute;
+        inset: 0;
+        z-index: 60;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+      }
+      #confirm-modal.open { pointer-events: auto; }
+      #confirm-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.4);
+        opacity: 0;
+        transition: opacity 0.3s;
+      }
+      #confirm-modal.open #confirm-backdrop { opacity: 1; }
+      #confirm-dialog {
+        background: #fff;
+        border-radius: 1rem;
+        padding: 1.5rem;
+        width: 85%;
+        max-width: 24rem;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        transform: scale(0.95);
+        opacity: 0;
+        transition: all 0.3s;
+        position: relative;
+        z-index: 10;
+      }
+      #confirm-modal.open #confirm-dialog { transform: scale(1); opacity: 1; }
+      #confirm-dialog h3 { font-size: 1.125rem; font-weight: 700; color: var(--gray-800); margin-bottom: 0.5rem; }
+      #confirm-dialog p { font-size: 0.875rem; color: var(--gray-600); margin-bottom: 1.5rem; }
+      #confirm-dialog .row { display: flex; gap: 0.75rem; }
+      #confirm-dialog .btn { flex: 1; padding: 0.625rem 1rem; }
+
+      /* ===== お知らせ（使い方と同じ見た目）===== */
+      #notice-modal {
+        position: absolute;
+        inset: 0;
+        z-index: 80;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        pointer-events: none;
+      }
+      #notice-modal.open { pointer-events: auto; }
+      #notice-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.3);
+        opacity: 0;
+        transition: opacity 0.3s;
+      }
+      #notice-modal.open #notice-backdrop { opacity: 1; }
+      #notice-sheet {
+        position: relative;
+        z-index: 10;
+        height: 90%;
+        background: #fff;
+        border-radius: 1.5rem 1.5rem 0 0;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        display: flex;
+        flex-direction: column;
+        transform: translateY(100%);
+        transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      #notice-modal.open #notice-sheet { transform: translateY(0); }
+      #notice-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0.5rem 1.25rem calc(2rem + env(safe-area-inset-bottom, 0px));
+        font-size: 0.875rem;
+        color: var(--gray-700);
+      }
+      #notice-body h3 {
+        margin: 1.25rem 0 0.375rem;
+        font-size: 0.9375rem;
+        font-weight: 700;
+        color: var(--teal-600);
+      }
+      #notice-body p, #notice-body li { line-height: 1.7; }
+      #notice-body ul { padding-left: 1.1rem; }
+      #notice-body .note { font-size: 0.8125rem; color: var(--gray-600); margin: 0.25rem 0; }
+      /* ===== お知らせ（ベル）===== */
+      #btn-notice { position: relative; }
+      #notice-dot {
+        display: none;
+        position: absolute;
+        top: 3px;
+        right: 3px;
+        width: 9px;
+        height: 9px;
+        border-radius: 9999px;
+        background: #ef4444;
+        border: 2px solid #fff;
+        box-sizing: content-box;
+      }
+      #notice-dot.show { display: block; }
+      /* ベルが増えた分、狭い画面ではバージョン表記を隠して収める */
+      @media (max-width: 380px) { h1 .ver { display: none; } }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <!-- ヘッダー -->
+      <header>
+        <h1>
+          M<span class="accent">ε</span>mol Lite
+          <span class="ver">- v0.05</span>
+        </h1>
+        <div class="header-right">
+          <div id="save-indicator">
+            <span data-icon="check" data-size="14"></span>
+            保存済み
+          </div>
+          <button id="btn-notice" class="round-btn" aria-label="お知らせ" title="お知らせ"><span data-icon="bell" data-size="18"></span><span id="notice-dot"></span></button>
+          <button id="btn-info" class="round-btn" aria-label="使い方" title="使い方">
+            <span data-icon="info" data-size="18"></span>
+          </button>
+        </div>
+      </header>
+
+      <!-- メイン入力エリア -->
+      <main>
+        <div id="edit-banner">
+          <span class="label"><span data-icon="edit" data-size="14"></span>履歴のメモを編集中</span>
+          <button id="btn-cancel-edit">キャンセル</button>
+        </div>
+        <textarea id="main-editor" placeholder="ここにパパッとメモ..."></textarea>
+      </main>
+
+      <!-- 下部アクションバー -->
+      <footer>
+        <button id="btn-history" class="btn btn-gray">
+          <span data-icon="list" data-size="20"></span>
+          履歴
+        </button>
+        <button id="btn-save-new" class="btn btn-teal">
+          <span data-icon="send" data-size="20"></span>
+          <span id="save-label">保存して次へ</span>
+        </button>
+      </footer>
+
+      <!-- 履歴パネル (Bottom Sheet) -->
+      <div id="history-panel">
+        <div id="history-backdrop"></div>
+        <div class="sheet">
+          <div class="sheet-header">
+            <h2>過去のメモ</h2>
+            <div class="sheet-actions">
+              <button id="btn-import" class="round-btn" aria-label="読み込み (.memol)" title="読み込み (.memol)">
+                <span data-icon="upload" data-size="18"></span>
+              </button>
+              <button id="btn-export" class="round-btn" aria-label="書き出し (.memol)" title="書き出し (.memol)">
+                <span data-icon="download" data-size="18"></span>
+              </button>
+              <button id="btn-close-history" class="round-btn" aria-label="閉じる">
+                <span data-icon="x" data-size="18"></span>
+              </button>
+            </div>
+            <input type="file" id="import-file" hidden />
+          </div>
+          <div id="history-list"></div>
+        </div>
+      </div>
+
+      <!-- トースト通知 -->
+      <div id="toast">コピーしました</div>
+
+      <!-- お知らせ -->
+      <div id="notice-modal">
+        <div id="notice-backdrop"></div>
+        <div id="notice-sheet" role="dialog" aria-label="お知らせ">
+          <div class="sheet-header">
+            <h2>お知らせ</h2>
+            <button id="btn-close-notice" class="round-btn" aria-label="閉じる"><span data-icon="x" data-size="18"></span></button>
+          </div>
+          <div id="notice-body"></div>
+        </div>
+      </div>
+
+      <!-- 使い方 -->
+      <div id="info-modal">
+        <div id="info-backdrop"></div>
+        <div id="info-sheet" role="dialog" aria-label="使い方">
+          <div class="sheet-header">
+            <h2>使い方</h2>
+            <button id="btn-close-info" class="round-btn" aria-label="閉じる">
+              <span data-icon="x" data-size="18"></span>
+            </button>
+          </div>
+          <div id="info-body"></div>
+        </div>
+      </div>
+
+      <!-- 削除確認モーダル -->
+      <div id="confirm-modal">
+        <div id="confirm-backdrop"></div>
+        <div id="confirm-dialog">
+          <h3>メモを削除しますか？</h3>
+          <div id="confirm-excerpt"></div>
+          <p>この操作は取り消せません。</p>
+          <div class="row">
+            <button id="btn-cancel-delete" class="btn btn-gray">キャンセル</button>
+            <button id="btn-confirm-delete" class="btn btn-red">削除する</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+          // --- アイコン（インラインSVG。外部読み込み不要） ---
+          const ICONS = {
+              check: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+              list: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
+              send: '<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>',
+              x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+              copy: '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+              trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
+              download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
+              upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>',
+              eye: '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
+              info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+              bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+              edit: '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/>',
+              file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>'
+          };
+          function icon(name, size) {
+              return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
+          }
+          document.querySelectorAll('[data-icon]').forEach(el => {
+              el.outerHTML = icon(el.dataset.icon, el.dataset.size || 20);
+          });
+
+          // キーボード表示などでページ全体がずれたら、すぐ元の位置に戻す
+          window.addEventListener('scroll', () => {
+              if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
+          });
+
+          // --- 保存先（localStorage）の安全なラッパー。失敗しても画面は止めない ---
+          let toastTimeout;
+          let lastStoreErr = 0;
+          const store = {
+              get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+              set(k, v) {
+                  try { localStorage.setItem(k, v); return true; }
+                  catch (e) {
+                      const n = Date.now();
+                      if (n - lastStoreErr > 5000) {
+                          lastStoreErr = n;
+                          showToast('保存できませんでした（容量不足、または保存が無効です）');
+                      }
+                      return false;
+                  }
+              },
+              remove(k) { try { localStorage.removeItem(k); return true; } catch (e) { return false; } }
+          };
+
+          // --- UI Elements ---
+          const editor = document.getElementById('main-editor');
+          const indicator = document.getElementById('save-indicator');
+          const btnSaveNew = document.getElementById('btn-save-new');
+          const btnHistory = document.getElementById('btn-history');
+          const historyPanel = document.getElementById('history-panel');
+          const historyBackdrop = document.getElementById('history-backdrop');
+          const btnCloseHistory = document.getElementById('btn-close-history');
+          const historyList = document.getElementById('history-list');
+          const toast = document.getElementById('toast');
+          const editBanner = document.getElementById('edit-banner');
+          const btnCancelEdit = document.getElementById('btn-cancel-edit');
+          const saveLabel = document.getElementById('save-label');
+          const btnImport = document.getElementById('btn-import');
+          const btnExport = document.getElementById('btn-export');
+          const importFile = document.getElementById('import-file');
+
+          const infoModal = document.getElementById('info-modal');
+          const infoBody = document.getElementById('info-body');
+          const noticeModal = document.getElementById('notice-modal');
+          const noticeBody = document.getElementById('notice-body');
+          const confirmModal = document.getElementById('confirm-modal');
+          const confirmBackdrop = document.getElementById('confirm-backdrop');
+          const btnCancelDelete = document.getElementById('btn-cancel-delete');
+          const btnConfirmDelete = document.getElementById('btn-confirm-delete');
+
+          // --- State ---
+          const STORAGE_KEY_CURRENT = 'memol_current_draft';
+          const STORAGE_KEY_HISTORY = 'memol_history';
+          let saveTimeout;
+          const STORAGE_KEY_EDIT = 'memol_edit_state';
+          let memoToDeleteId = null;
+          let editingId = null;     // 編集中の履歴メモID（なければ null）
+          let stashedDraft = '';    // 編集前に書いていた下書き（編集後に元へ戻す）
+
+          // --- Initialize ---
+          // 前回書きかけのメモがあれば復元
+          const savedDraft = store.get(STORAGE_KEY_CURRENT);
+          if (savedDraft) {
+              editor.value = savedDraft;
+          }
+
+          // 編集中のままページを閉じた場合は編集状態を復元
+          try {
+              const es = JSON.parse(store.get(STORAGE_KEY_EDIT) || 'null');
+              if (es && getHistory().some(m => m.id === es.id)) {
+                  editingId = es.id;
+                  stashedDraft = es.stash || '';
+                  updateEditUI();
+              } else if (es) {
+                  store.remove(STORAGE_KEY_EDIT);
+              }
+          } catch (e) {}
+
+          // ロード時に自動的にフォーカスを当てる
+          setTimeout(() => editor.focus(), 100);
+
+          // --- 保存先の保護とお知らせ ---
+          const BACKUP_KEY = 'memol_last_backup';
+          const NOTICE_KEY = 'memol_notice_seen';
+          const NOTICE_VER = '0.05';
+          // ブラウザに「消さないで」と頼む（認められるかはブラウザ次第）
+          try {
+              if (navigator.storage && navigator.storage.persist) {
+                  navigator.storage.persisted().then(p => p || navigator.storage.persist()).catch(() => {});
+              }
+          } catch (e) {}
+          if (!Number(store.get(BACKUP_KEY))) store.set(BACKUP_KEY, String(Date.now()));  // 初回は今日を起点にする
+          // 30日以上バックアップ（.memol の書き出し）が無いか
+          function backupOverdue() {
+              const last = Number(store.get(BACKUP_KEY)) || 0;
+              return last > 0 && Date.now() - last > 30 * 86400000 && getHistory().length > 0;
+          }
+          // ベルの赤い印: 新しいお知らせがあるとき、またはバックアップが古いとき
+          const noticeDot = document.getElementById('notice-dot');
+          function updateNoticeDot() {
+              noticeDot.classList.toggle('show', store.get(NOTICE_KEY) !== NOTICE_VER || backupOverdue());
+          }
+          updateNoticeDot();
+
+          // --- Event Listeners ---
+
+          // 入力中の自動保存機能
+          editor.addEventListener('input', () => {
+              const ok = store.set(STORAGE_KEY_CURRENT, editor.value);
+
+              clearTimeout(saveTimeout);
+              indicator.style.opacity = ok ? '1' : '0';
+              saveTimeout = setTimeout(() => {
+                  indicator.style.opacity = '0';
+              }, 2000);
+          });
+
+          // 「保存して次へ」ボタン
+          btnSaveNew.addEventListener('click', () => {
+              const text = editor.value.trim();
+              if (!text) {
+                  showToast('メモが空です');
+                  return;
+              }
+
+              // 履歴のメモを編集中なら上書き保存して、元の下書きに戻る
+              if (editingId) {
+                  if (!updateMemo(editingId, text)) return;
+                  endEdit();
+                  editor.focus();
+                  showToast('更新しました');
+                  return;
+              }
+
+              // 保存に失敗したときは入力欄を空にしない（書いた内容を守る）
+              if (!saveToHistory(text)) return;
+
+              editor.value = '';
+              store.remove(STORAGE_KEY_CURRENT);
+              editor.focus();
+
+              showToast('保存しました');
+          });
+
+          // 編集キャンセル
+          btnCancelEdit.addEventListener('click', () => {
+              endEdit();
+              editor.focus();
+              showToast('編集をキャンセルしました');
+          });
+
+          // 履歴パネルの開閉
+          btnHistory.addEventListener('click', () => {
+              renderHistory();
+              historyPanel.classList.add('open');
+              historyBackdrop.style.opacity = '1';
+              historyBackdrop.style.pointerEvents = 'auto';
+          });
+
+          const closeHistory = () => {
+              historyPanel.classList.remove('open');
+              historyBackdrop.style.opacity = '0';
+              historyBackdrop.style.pointerEvents = 'none';
+              setTimeout(() => editor.focus(), 300);
+          };
+
+          btnCloseHistory.addEventListener('click', closeHistory);
+          btnExport.addEventListener('click', exportMemos);
+
+          btnImport.addEventListener('click', () => importFile.click());
+          document.getElementById('btn-info').addEventListener('click', openInfo);
+          document.getElementById('btn-close-info').addEventListener('click', closeInfo);
+          document.getElementById('btn-notice').addEventListener('click', openNotice);
+          document.getElementById('btn-close-notice').addEventListener('click', closeNotice);
+          document.getElementById('notice-backdrop').addEventListener('click', closeNotice);
+          document.getElementById('info-backdrop').addEventListener('click', closeInfo);
+          document.addEventListener('keydown', (e) => {
+              if (e.key !== 'Escape') return;
+              if (noticeModal.classList.contains('open')) closeNotice();
+              if (infoModal.classList.contains('open')) closeInfo();
+          });
+
+          importFile.addEventListener('change', () => {
+              const file = importFile.files && importFile.files[0];
+              if (file) importMemos(file);
+              importFile.value = ''; // 同じファイルをもう一度選べるように
+          });
+          historyBackdrop.addEventListener('click', closeHistory);
+
+          btnCancelDelete.addEventListener('click', closeConfirmModal);
+          confirmBackdrop.addEventListener('click', closeConfirmModal);
+
+          btnConfirmDelete.addEventListener('click', () => {
+              if (memoToDeleteId) {
+                  if (memoToDeleteId === editingId) endEdit(); // 編集中のメモを消すなら編集も終了
+                  deleteFromHistory(memoToDeleteId);
+                  showToast('削除しました');
+                  closeConfirmModal();
+              }
+          });
+
+          // --- Functions ---
+
+          function saveToHistory(text) {
+              const history = getHistory();
+              history.unshift({
+                  id: Date.now().toString(),
+                  text: text,
+                  timestamp: new Date().toISOString()
+              });
+              return store.set(STORAGE_KEY_HISTORY, JSON.stringify(history));
+          }
+
+          // --- 入出力（.memol = JSON） ---
+          function pad2(n) { return String(n).padStart(2, '0'); }
+
+          function exportMemos() {
+              const memos = getHistory();
+              if (memos.length === 0) {
+                  showToast('書き出すメモがありません');
+                  return;
+              }
+              const data = {
+                  app: 'memol',
+                  version: 1,
+                  exportedAt: new Date().toISOString(),
+                  memos: memos
+              };
+              const d = new Date();
+              const name = `memol-${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}.memol`;
+              const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/octet-stream' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = name;
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              setTimeout(() => URL.revokeObjectURL(url), 1000);
+              store.set(BACKUP_KEY, String(Date.now()));
+              updateNoticeDot();
+              showToast(`${memos.length}件を書き出しました`);
+          }
+
+          function importMemos(file) {
+              const reader = new FileReader();
+              reader.onerror = () => showToast('ファイルを読み込めませんでした');
+              reader.onload = () => {
+                  let list;
+                  try {
+                      const data = JSON.parse(reader.result);
+                      list = Array.isArray(data) ? data : data.memos;
+                  } catch (e) {
+                      list = null;
+                  }
+                  if (!Array.isArray(list)) {
+                      showToast('.memol ファイルではありません');
+                      return;
+                  }
+
+                  // 形式チェックして整える
+                  const incoming = [];
+                  list.forEach(m => {
+                      if (!m || typeof m.id !== 'string' || typeof m.text !== 'string' || !m.text.trim()) return;
+                      const ts = new Date(m.timestamp);
+                      const memo = {
+                          id: m.id,
+                          text: m.text,
+                          timestamp: isNaN(ts) ? new Date().toISOString() : ts.toISOString()
+                      };
+                      if (m.updatedAt && !isNaN(new Date(m.updatedAt))) memo.updatedAt = new Date(m.updatedAt).toISOString();
+                      incoming.push(memo);
+                  });
+                  if (incoming.length === 0) {
+                      showToast('読み込めるメモがありませんでした');
+                      return;
+                  }
+
+                  // 今のメモにマージ（同じIDは新しい方を採用）
+                  const stamp = m => new Date(m.updatedAt || m.timestamp).getTime();
+                  const byId = new Map(getHistory().map(m => [m.id, m]));
+                  let added = 0;
+                  let updated = 0;
+                  incoming.forEach(m => {
+                      const cur = byId.get(m.id);
+                      if (!cur) {
+                          byId.set(m.id, m);
+                          added++;
+                      } else if (stamp(m) > stamp(cur)) {
+                          byId.set(m.id, m);
+                          updated++;
+                      }
+                  });
+                  const merged = Array.from(byId.values()).sort(
+                      (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
+                  );
+                  if (!store.set(STORAGE_KEY_HISTORY, JSON.stringify(merged))) return;
+                  renderHistory();
+
+                  const skipped = incoming.length - added - updated;
+                  let msg = `${added}件を追加しました`;
+                  if (updated) msg += `（${updated}件を更新）`;
+                  if (skipped) msg += `（${skipped}件は重複のためスキップ）`;
+                  showToast(msg);
+              };
+              reader.readAsText(file);
+          }
+
+          function updateMemo(id, text) {
+              const history = getHistory();
+              const memo = history.find(m => m.id === id);
+              if (memo) {
+                  memo.text = text;
+                  memo.updatedAt = new Date().toISOString();
+                  return store.set(STORAGE_KEY_HISTORY, JSON.stringify(history));
+              } else {
+                  return saveToHistory(text); // 万一元のメモが無ければ新規として保存
+              }
+          }
+
+          // 履歴のメモを入力欄に読み込んで編集開始（今の下書きは退避）
+          function startEdit(memo) {
+              if (editingId) {
+                  if (editingId === memo.id) {
+                      closeHistory();
+                  } else {
+                      showToast('編集中です。先に更新かキャンセルをしてください');
+                  }
+                  return;
+              }
+              stashedDraft = editor.value;
+              editingId = memo.id;
+              store.set(STORAGE_KEY_EDIT, JSON.stringify({ id: memo.id, stash: stashedDraft }));
+              editor.value = memo.text;
+              store.set(STORAGE_KEY_CURRENT, memo.text);
+              updateEditUI();
+              editor.setSelectionRange(editor.value.length, editor.value.length);
+              closeHistory();
+          }
+
+          // 編集終了：退避していた下書きを入力欄へ戻す
+          function endEdit() {
+              editor.value = stashedDraft;
+              if (stashedDraft) {
+                  store.set(STORAGE_KEY_CURRENT, stashedDraft);
+              } else {
+                  store.remove(STORAGE_KEY_CURRENT);
+              }
+              editingId = null;
+              stashedDraft = '';
+              store.remove(STORAGE_KEY_EDIT);
+              updateEditUI();
+          }
+
+          function updateEditUI() {
+              const on = editingId !== null;
+              editBanner.classList.toggle('show', on);
+              saveLabel.textContent = on ? '更新して戻る' : '保存して次へ';
+          }
+
+          function getHistory() {
+              try {
+                  const data = store.get(STORAGE_KEY_HISTORY);
+                  return data ? JSON.parse(data) : [];
+              } catch (e) {
+                  return [];
+              }
+          }
+
+          function deleteFromHistory(id) {
+              const history = getHistory().filter(memo => memo.id !== id);
+              store.set(STORAGE_KEY_HISTORY, JSON.stringify(history));
+              renderHistory();
+          }
+
+          function renderHistory() {
+              const history = getHistory();
+              historyList.innerHTML = '';
+
+              if (history.length === 0) {
+                  historyList.innerHTML = `
+                      <div class="empty">
+                          ${icon('file', 40)}
+                          <p>保存されたメモはありません</p>
+                      </div>
+                  `;
+                  return;
+              }
+
+              history.forEach(memo => {
+                  const date = new Date(memo.timestamp);
+                  const formattedDate = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+
+                  const card = document.createElement('div');
+                  card.className = 'card';
+
+                  const textDiv = document.createElement('div');
+                  textDiv.className = 'card-text collapsed';
+                  renderLite(textDiv, memo.text);
+                  // 長いメモはタップで全文表示／折りたたみ（リンクのタップは除く）
+                  textDiv.addEventListener('click', (e) => {
+                      if (e.target.closest('a')) return;
+                      if (textDiv.classList.contains('clamped')) textDiv.classList.toggle('collapsed');
+                  });
+
+                  const footer = document.createElement('div');
+                  footer.className = 'card-footer';
+
+                  const timeSpan = document.createElement('span');
+                  timeSpan.className = 'card-time';
+                  timeSpan.textContent = formattedDate;
+
+                  const actionDiv = document.createElement('div');
+                  actionDiv.className = 'card-actions';
+
+                  const btnEdit = document.createElement('button');
+                  btnEdit.className = 'icon-btn edit';
+                  btnEdit.setAttribute('aria-label', '編集');
+                  btnEdit.innerHTML = icon('edit', 16);
+                  btnEdit.onclick = () => startEdit(memo);
+
+                  const btnCopy = document.createElement('button');
+                  btnCopy.className = 'icon-btn copy';
+                  btnCopy.setAttribute('aria-label', 'コピー');
+                  btnCopy.innerHTML = icon('copy', 16);
+                  btnCopy.onclick = () => copyToClipboard(memo.text);
+
+                  const btnDelete = document.createElement('button');
+                  btnDelete.className = 'icon-btn del';
+                  btnDelete.setAttribute('aria-label', '削除');
+                  btnDelete.innerHTML = icon('trash', 16);
+                  btnDelete.onclick = () => openConfirmModal(memo.id);
+
+                  actionDiv.appendChild(btnEdit);
+                  actionDiv.appendChild(btnCopy);
+
+                  // 左: 削除と日時 / 右: 編集とコピー（誤タップしにくいように離す）
+                  const leftDiv = document.createElement('div');
+                  leftDiv.className = 'card-left';
+                  leftDiv.appendChild(btnDelete);
+                  leftDiv.appendChild(timeSpan);
+                  footer.appendChild(leftDiv);
+                  footer.appendChild(actionDiv);
+                  card.appendChild(textDiv);
+                  card.appendChild(footer);
+                  historyList.appendChild(card);
+
+                  // 高さを超える場合だけ「タップで開閉」を有効にする
+                  if (textDiv.scrollHeight > textDiv.clientHeight + 1) {
+                      textDiv.classList.add('clamped');
+                  }
+              });
+          }
+
+          // --- メモの表示（Lite） ---
+          // 1行目をタイトルとして大きく表示し、URLは色付き＋下線のリンクにする。ほかは書いたまま。
+          function renderLite(container, text) {
+              text.split('\n').forEach((line, i) => {
+                  const div = document.createElement('div');
+                  div.className = i === 0 ? 'memo-title' : 'memo-line';
+                  appendWithLinks(div, line);
+                  container.appendChild(div);
+              });
+          }
+
+          const URL_SRC = 'https?:\/\/(?:[A-Za-z0-9\-._~:\/?#!$&()+,;=%]|@(?![@\[]))+';
+          // URL末尾の句読点と、対応する「(」のない「)」を外す
+          function trimUrl(u) {
+              for (;;) {
+                  const c = u[u.length - 1];
+                  if (c && '.,;:!?'.indexOf(c) !== -1) { u = u.slice(0, -1); continue; }
+                  if (c === ')') {
+                      const open = (u.match(/\(/g) || []).length;
+                      const close = (u.match(/\)/g) || []).length;
+                      if (close > open) { u = u.slice(0, -1); continue; }
+                  }
+                  break;
+              }
+              return u;
+          }
+          function appendWithLinks(parent, text) {
+              const re = new RegExp(URL_SRC, 'g');
+              let last = 0;
+              let m;
+              while ((m = re.exec(text)) !== null) {
+                  const url = trimUrl(m[0]); // 末尾の句読点・対応のない「)」は含めない
+                  re.lastIndex = m.index + url.length;
+                  if (m.index > last) parent.appendChild(document.createTextNode(text.slice(last, m.index)));
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.target = '_blank';
+                  a.rel = 'noopener noreferrer';
+                  a.textContent = url;
+                  parent.appendChild(a);
+                  last = m.index + url.length;
+              }
+              if (last < text.length) parent.appendChild(document.createTextNode(text.slice(last)));
+          }
+
+          // --- お知らせ（ベルのボタン）---
+          function openNotice() {
+              buildNotice();
+              noticeModal.classList.add('open');
+              noticeBody.scrollTop = 0;
+              store.set(NOTICE_KEY, NOTICE_VER);
+              updateNoticeDot();
+          }
+          function closeNotice() {
+              noticeModal.classList.remove('open');
+          }
+
+          function buildNotice() {
+              noticeBody.innerHTML = '';
+              const section = (title) => {
+                  const h = document.createElement('h3');
+                  h.textContent = title;
+                  noticeBody.appendChild(h);
+              };
+              const list = (items) => {
+                  const ul = document.createElement('ul');
+                  items.forEach(t => {
+                      const li = document.createElement('li');
+                      li.textContent = t;
+                      ul.appendChild(li);
+                  });
+                  noticeBody.appendChild(ul);
+              };
+              const release = (title, items) => {
+                  const p = document.createElement('p');
+                  p.textContent = title;
+                  p.style.cssText = 'font-weight:600;margin-top:0.75rem;';
+                  noticeBody.appendChild(p);
+                  list(items);
+              };
+
+              if (backupOverdue()) {
+                  const p = document.createElement('p');
+                  p.className = 'note';
+                  p.style.cssText = 'color:#dc2626;font-weight:600;margin-top:1rem;';
+                  p.textContent = '.memol のバックアップを30日以上取っていません。';
+                  noticeBody.appendChild(p);
+              }
+
+              section('Safariの方へ');
+              list([
+                  'メモは、この端末のブラウザの中に保存されます。iPhoneのSafariは、しばらく開かなかったサイトのデータを消すことがあります。',
+                  '共有ボタンから「ホーム画面に追加」して使うと、消えにくくなります。',
+                  '履歴の右上の矢印（.memol への書き出し）で、バックアップを取れます。30日以上取っていないと、このベルに赤い印が出ます。'
+              ]);
+
+              section('更新履歴');
+              release('v0.05（2026/11/19）', [
+                  'お知らせ（このベルのボタン）を追加しました。',
+                  '「Safariの方へ」と更新履歴を、ここに置きました。'
+              ]);
+              release('v0.04（2026/11/19）', [
+                  '保存に失敗したときは知らせるようにしました。失敗したときも、書いた内容は入力欄に残ります。',
+                  '@ や ( ) を含むURLが途中で切れないようにしました。',
+                  'ブラウザに保存データを消さないよう頼む処理と、バックアップの赤い印を追加しました。'
+              ]);
+          }
+
+          // --- 使い方 (iボタン) ---
+          // 例は実際の描画関数で表示するので、書式を変えても説明と食い違わない
+          function openInfo() {
+              if (!infoBody.childElementCount) buildInfo();
+              infoModal.classList.add('open');
+              infoBody.scrollTop = 0;
+          }
+          function closeInfo() {
+              infoModal.classList.remove('open');
+          }
+
+          function buildInfo() {
+              const section = (title) => {
+                  const h = document.createElement('h3');
+                  h.textContent = title;
+                  infoBody.appendChild(h);
+              };
+              const note = (text) => {
+                  const p = document.createElement('p');
+                  p.className = 'note';
+                  p.textContent = text;
+                  infoBody.appendChild(p);
+              };
+              const list = (items) => {
+                  const ul = document.createElement('ul');
+                  items.forEach(t => {
+                      const li = document.createElement('li');
+                      li.textContent = t;
+                      ul.appendChild(li);
+                  });
+                  infoBody.appendChild(ul);
+              };
+
+              section('書く');
+              list([
+                  '開いてすぐ書けます。入力すると自動で保存されます（書きかけも残ります）。',
+                  '「保存して次へ」で履歴に追加して、入力欄を空にします。',
+                  '1行目は、履歴ではタイトルとして大きく表示されます。',
+                  'URL（http:// や https:// で始まる文字）は、色付き＋下線のリンクになります。'
+              ]);
+
+              section('履歴');
+              list([
+                  '鉛筆で編集、コピーアイコンでコピー、左端のごみ箱で削除します（削除の前に確認が出ます）。',
+                  '編集中は、上に「履歴のメモを編集中」と出ます。「更新して戻る」で上書き、「キャンセル」でやめます。編集前に書いていた下書きは、終わると元に戻ります。',
+                  '長いメモはタップで全文を開閉できます。'
+              ]);
+
+              section('書き出し・読み込み（.memol）');
+              list([
+                  '履歴の右上の矢印で、全メモを .memol ファイル（中身はJSON）に書き出し（下向き）／読み込み（上向き）できます。',
+                  '読み込みは今の履歴に追加されます。同じメモは重複せず、新しい方が残ります。'
+              ]);
+
+              section('書式が使いたいときは');
+              note('見出し・色・マーカー・コードブロックなどの書式や、プレビュー表示は Mεmol Pro で使えます。');
+              const a = document.createElement('a');
+              a.href = 'pro.html';
+              a.textContent = 'Mεmol Pro を開く';
+              a.style.cssText = 'color:#2563eb;text-decoration:underline;text-underline-offset:2px;font-size:0.875rem;';
+              infoBody.appendChild(a);
+          }
+
+          function copyToClipboard(text) {
+              if (navigator.clipboard && window.isSecureContext) {
+                  navigator.clipboard.writeText(text).then(
+                      () => showToast('コピーしました'),
+                      () => fallbackCopy(text)
+                  );
+              } else {
+                  fallbackCopy(text);
+              }
+          }
+
+          function fallbackCopy(text) {
+              const textArea = document.createElement('textarea');
+              textArea.value = text;
+              textArea.style.position = 'fixed';
+              textArea.style.left = '-999999px';
+              textArea.style.top = '-999999px';
+              document.body.appendChild(textArea);
+              textArea.focus();
+              textArea.select();
+              try {
+                  document.execCommand('copy');
+                  showToast('コピーしました');
+              } catch (err) {
+                  console.error('コピーに失敗しました', err);
+              }
+              textArea.remove();
+          }
+
+          function showToast(message, ms) {
+              toast.textContent = message;
+              toast.style.opacity = '1';
+              clearTimeout(toastTimeout);
+              toastTimeout = setTimeout(() => {
+                  toast.style.opacity = '0';
+              }, ms || 2000);
+          }
+
+          function openConfirmModal(id) {
+              memoToDeleteId = id;
+              const memo = getHistory().find(m => m.id === id);
+              const firstLine = memo ? memo.text.split('\n')[0].replace(/^#+[ 　]?/, '').trim() : '';
+              const excerpt = document.getElementById('confirm-excerpt');
+              excerpt.textContent = firstLine.length > 40 ? firstLine.slice(0, 40) + '…' : firstLine;
+              excerpt.style.display = firstLine ? '' : 'none';
+              confirmModal.classList.add('open');
+          }
+
+          function closeConfirmModal() {
+              memoToDeleteId = null;
+              confirmModal.classList.remove('open');
+          }
+      });
+    </script>
+  </body>
+</html>
